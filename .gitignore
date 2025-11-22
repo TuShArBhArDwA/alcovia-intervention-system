@@ -1,0 +1,11 @@
+backend/node_modules/
+backend/.env
+backend/.DS_Store
+
+# Logs
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+
+# IDE files
+backend/.vscode/
