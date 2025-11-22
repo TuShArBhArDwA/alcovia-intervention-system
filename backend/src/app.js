@@ -12,12 +12,10 @@ app.use(express.json());
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// Root Test
 app.get("/", (req, res) => {
   res.json({ message: "Backend Running..." });
 });
 
-// Daily Check-in
 app.post("/daily-checkin", async (req, res) => {
   try {
     const { student_id, quiz_score, focus_minutes } = req.body;
@@ -26,7 +24,6 @@ app.post("/daily-checkin", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Ensure student exists
     const studentExists = await pool.query(
       `SELECT id FROM students WHERE id = $1`,
       [student_id]
@@ -38,13 +35,10 @@ app.post("/daily-checkin", async (req, res) => {
          VALUES ($1, 'Unknown', $2, 'ON_TRACK')`,
         [student_id, `${student_id}@example.com`]
       );
-      console.log("New student created:", student_id);
     }
 
-    // Determine outcome
     const outcome = quiz_score > 7 && focus_minutes > 60 ? "PASS" : "FAIL";
 
-    // Insert daily log
     const logResult = await pool.query(
       `INSERT INTO daily_logs (student_id, quiz_score, focus_minutes, outcome)
        VALUES ($1, $2, $3, $4)
@@ -62,7 +56,6 @@ app.post("/daily-checkin", async (req, res) => {
       return res.json({ status: "On Track" });
     }
 
-    // Create intervention on FAIL
     const interventionResult = await pool.query(
       `INSERT INTO interventions (student_id, daily_log_id, status)
        VALUES ($1, $2, 'PENDING_MENTOR')
@@ -77,7 +70,6 @@ app.post("/daily-checkin", async (req, res) => {
       [student_id]
     );
 
-    // Trigger n8n
     if (N8N_WEBHOOK_URL) {
       axios.post(N8N_WEBHOOK_URL, {
         student_id,
@@ -85,18 +77,16 @@ app.post("/daily-checkin", async (req, res) => {
         intervention_id: interventionId,
         quiz_score,
         focus_minutes,
-      }).catch(() => console.log("Webhook failed"));
+      });
     }
 
     return res.json({ status: "Pending Mentor Review" });
-
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server Error" });
   }
 });
 
-// Approve intervention (EMAIL LINK)
 app.get("/assign-intervention", async (req, res) => {
   try {
     const { student_id, intervention_id } = req.query;
@@ -123,14 +113,12 @@ app.get("/assign-intervention", async (req, res) => {
     );
 
     res.send("Intervention Approved! Task Assigned Successfully 🎯");
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Server Error");
   }
 });
 
-// Complete intervention
 app.post("/complete-intervention", async (req, res) => {
   const { student_id } = req.body;
 
@@ -155,7 +143,6 @@ app.post("/complete-intervention", async (req, res) => {
     );
 
     res.json({ status: "Unlocked. Back on Track!" });
-
   } catch (err) {
     res.status(500).json({ error: "Server Error" });
   }
