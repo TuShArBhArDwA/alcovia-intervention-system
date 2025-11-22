@@ -112,7 +112,12 @@ app.get("/assign-intervention", async (req, res) => {
       [student_id]
     );
 
-    res.send("Intervention Approved! Task Assigned Successfully 🎯");
+    await axios.post(`${N8N_WEBHOOK_URL}-complete`, {
+      student_id,
+      intervention_id,
+    });
+
+    res.send("Intervention Approved! Task Assigned Successfully.");
   } catch (err) {
     console.error(err);
     res.status(500).send("Server Error");
