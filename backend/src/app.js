@@ -1,13 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-console.log("DB ENV VALUES LOADED:", {
-  DB_USER: process.env.DB_USER,
-  DB_HOST: process.env.DB_HOST,
-  DB_PORT: process.env.DB_PORT,
-  DB_NAME: process.env.DB_NAME
-});
-
 import express from "express";
 import cors from "cors";
 import { pool } from "./db.js";
@@ -77,6 +70,70 @@ app.post("/daily-checkin", async (req, res) => {
   } catch (err) {
     console.error("Error:", err);
     return res.status(500).json({ error: "Internal error" });
+  }
+});
+
+app.post("/assign-intervention", async (req, res) => {
+  const { student_id, task } = req.body;
+
+  if (!student_id || !task) {
+    return res.status(400).json({ error: "Missing student_id or task" });
+  }
+
+  try {
+    const interventionResult = await pool.query(
+      `UPDATE interventions 
+       SET status = 'ASSIGNED', task = $2 
+       WHERE student_id = $1 AND status = 'PENDING_MENTOR'
+       RETURNING id`,
+      [student_id, task]
+    );
+
+    if (interventionResult.rowCount === 0) {
+      return res.status(400).json({ error: "No pending intervention found" });
+    }
+
+    await pool.query(
+      `UPDATE students SET status = 'REMEDIAL' WHERE id = $1`,
+      [student_id]
+    );
+
+    return res.json({ status: "Task Assigned" });
+  } catch (err) {
+    console.error("Error:", err.message);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/complete-intervention", async (req, res) => {
+  const { student_id } = req.body;
+
+  if (!student_id) {
+    return res.status(400).json({ error: "Missing student_id" });
+  }
+
+  try {
+    const interventionResult = await pool.query(
+      `UPDATE interventions 
+       SET status = 'RESOLVED' 
+       WHERE student_id = $1 AND status = 'ASSIGNED'
+       RETURNING id`,
+      [student_id]
+    );
+
+    if (interventionResult.rowCount === 0) {
+      return res.status(400).json({ error: "No active intervention found" });
+    }
+
+    await pool.query(
+      `UPDATE students SET status = 'ON_TRACK' WHERE id = $1`,
+      [student_id]
+    );
+
+    return res.json({ status: "Unlocked. Back on Track!" });
+  } catch (err) {
+    console.error("Error:", err.message);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
