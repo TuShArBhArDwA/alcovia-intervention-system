@@ -25,16 +25,21 @@ app.post("/daily-checkin", async (req, res) => {
     }
 
     const studentExists = await pool.query(
-      `SELECT id FROM students WHERE id = $1`,
+      `SELECT id, name FROM students WHERE id = $1`,
       [student_id]
     );
 
+    let student_name;
+
     if (studentExists.rowCount === 0) {
+      student_name = "Unknown Student";
       await pool.query(
         `INSERT INTO students (id, name, email, status)
-         VALUES ($1, 'Unknown', $2, 'ON_TRACK')`,
-        [student_id, `${student_id}@example.com`]
+         VALUES ($1, $2, $3, 'ON_TRACK')`,
+        [student_id, student_name, `${student_id}@example.com`]
       );
+    } else {
+      student_name = studentExists.rows[0].name;
     }
 
     const outcome = quiz_score > 7 && focus_minutes > 60 ? "PASS" : "FAIL";
@@ -73,14 +78,16 @@ app.post("/daily-checkin", async (req, res) => {
     if (N8N_WEBHOOK_URL) {
       axios.post(N8N_WEBHOOK_URL, {
         student_id,
+        student_name,
         daily_log_id: dailyLogId,
         intervention_id: interventionId,
         quiz_score,
         focus_minutes,
-      });
+      }).catch(() => console.log("Webhook failed"));
     }
 
     return res.json({ status: "Pending Mentor Review" });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server Error" });
@@ -112,12 +119,8 @@ app.get("/assign-intervention", async (req, res) => {
       [student_id]
     );
 
-    await axios.post(`${N8N_WEBHOOK_URL}-complete`, {
-      student_id,
-      intervention_id,
-    });
+    res.send("Intervention Approved! Task Assigned Successfully 🎯");
 
-    res.send("Intervention Approved! Task Assigned Successfully.");
   } catch (err) {
     console.error(err);
     res.status(500).send("Server Error");
@@ -148,6 +151,7 @@ app.post("/complete-intervention", async (req, res) => {
     );
 
     res.json({ status: "Unlocked. Back on Track!" });
+
   } catch (err) {
     res.status(500).json({ error: "Server Error" });
   }
