@@ -12,12 +12,10 @@ app.use(express.json());
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// Root Test
 app.get("/", (req, res) => {
   res.json({ message: "Backend Running..." });
 });
 
-// Daily Check-in
 app.post("/daily-checkin", async (req, res) => {
   try {
     const { student_id, quiz_score, focus_minutes } = req.body;
@@ -26,7 +24,6 @@ app.post("/daily-checkin", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Ensure student exists
     const studentExists = await pool.query(
       `SELECT id FROM students WHERE id = $1`,
       [student_id]
@@ -38,14 +35,10 @@ app.post("/daily-checkin", async (req, res) => {
          VALUES ($1, 'Unknown', $2, 'ON_TRACK')`,
         [student_id, `${student_id}@example.com`]
       );
-      console.log("New student created:", student_id);
     }
 
-    // Determine outcome
-    const outcome =
-      quiz_score > 7 && focus_minutes > 60 ? "PASS" : "FAIL";
+    const outcome = quiz_score > 7 && focus_minutes > 60 ? "PASS" : "FAIL";
 
-    // Insert into daily_logs
     const logResult = await pool.query(
       `INSERT INTO daily_logs (student_id, quiz_score, focus_minutes, outcome)
        VALUES ($1, $2, $3, $4)
@@ -60,11 +53,9 @@ app.post("/daily-checkin", async (req, res) => {
         `UPDATE students SET status = 'ON_TRACK' WHERE id = $1`,
         [student_id]
       );
-
       return res.json({ status: "On Track" });
     }
 
-    // Create intervention on FAIL
     const interventionResult = await pool.query(
       `INSERT INTO interventions (student_id, daily_log_id, status)
        VALUES ($1, $2, 'PENDING_MENTOR')
@@ -79,74 +70,72 @@ app.post("/daily-checkin", async (req, res) => {
       [student_id]
     );
 
-    // Trigger n8n webhook (Notify Mentor)
     if (N8N_WEBHOOK_URL) {
-      await axios.post(N8N_WEBHOOK_URL, {
+      axios.post(N8N_WEBHOOK_URL, {
         student_id,
         daily_log_id: dailyLogId,
         intervention_id: interventionId,
         quiz_score,
         focus_minutes,
-      }).catch(() => console.log("Webhook failed"));
+      });
     }
 
     return res.json({ status: "Pending Mentor Review" });
-
   } catch (err) {
-    console.error("Error:", err);
+    console.error(err);
     return res.status(500).json({ error: "Server Error" });
   }
 });
 
-// Assign Intervention (n8n triggers this)
-app.post("/assign-intervention", async (req, res) => {
-  const { student_id, task } = req.body;
-
-  if (!student_id || !task) {
-    return res.status(400).json({ error: "Missing student_id or task" });
-  }
-
+app.get("/assign-intervention", async (req, res) => {
   try {
-    const update = await pool.query(
-      `UPDATE interventions
-       SET status = 'ASSIGNED', task = $2
-       WHERE student_id = $1 AND status = 'PENDING_MENTOR'
+    const { student_id, intervention_id } = req.query;
+
+    if (!student_id || !intervention_id) {
+      return res.status(400).send("Missing required query params");
+    }
+
+    const result = await pool.query(
+      `UPDATE interventions 
+       SET status = 'ASSIGNED'
+       WHERE id = $1 AND student_id = $2 
        RETURNING id`,
-      [student_id, task]
+      [intervention_id, student_id]
     );
 
-    if (update.rowCount === 0)
-      return res.status(400).json({ error: "No pending intervention found" });
+    if (result.rowCount === 0) {
+      return res.status(400).send("No intervention found to assign");
+    }
 
     await pool.query(
       `UPDATE students SET status = 'REMEDIAL' WHERE id = $1`,
       [student_id]
     );
 
-    res.json({ status: "Task Assigned" });
+    res.send("Intervention Approved! Task Assigned Successfully 🎯");
   } catch (err) {
-    res.status(500).json({ error: "Server Error" });
+    console.error(err);
+    res.status(500).send("Server Error");
   }
 });
 
-// Complete intervention
 app.post("/complete-intervention", async (req, res) => {
   const { student_id } = req.body;
 
-  if (!student_id)
-    return res.status(400).json({ error: "Missing student_id" });
+  if (!student_id) return res.status(400).json({ error: "Missing student_id" });
 
   try {
     const result = await pool.query(
-      `UPDATE interventions
+      `UPDATE interventions 
        SET status = 'RESOLVED'
        WHERE student_id = $1 AND status = 'ASSIGNED'
        RETURNING id`,
       [student_id]
     );
 
-    if (result.rowCount === 0)
+    if (result.rowCount === 0) {
       return res.status(400).json({ error: "No active intervention found" });
+    }
 
     await pool.query(
       `UPDATE students SET status = 'ON_TRACK' WHERE id = $1`,
