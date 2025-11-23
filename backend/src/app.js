@@ -87,23 +87,18 @@ app.post("/daily-checkin", async (req, res) => {
     }
 
     return res.json({ status: "Pending Mentor Review" });
-
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Server Error" });
   }
 });
 
-app.get("/assign-intervention", async (req, res) => {
+app.post("/assign-intervention", async (req, res) => {
   try {
-    console.log("🔥 Mentor approval triggered!");
-    console.log("Query Params:", req.query);
-
-    const { student_id, intervention_id } = req.query;
+    const { student_id, intervention_id } = req.body;
 
     if (!student_id || !intervention_id) {
-      console.log("❌ Missing params");
-      return res.status(400).send("Missing required query params");
+      return res.status(400).send("Missing required body params");
     }
 
     const result = await pool.query(
@@ -115,7 +110,6 @@ app.get("/assign-intervention", async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      console.log("Intervention not found");
       return res.status(400).send("No intervention found to assign");
     }
 
@@ -124,15 +118,12 @@ app.get("/assign-intervention", async (req, res) => {
       [student_id]
     );
 
-    console.log("Intervention assigned successfully!");
-    res.send("Intervention Approved! Task Assigned Successfully");
-
+    res.send("Intervention Approved! Task Assigned Successfully 🎯");
   } catch (err) {
-    console.error("Server Error:", err);
+    console.error(err);
     res.status(500).send("Server Error");
   }
 });
-
 
 app.post("/complete-intervention", async (req, res) => {
   const { student_id } = req.body;
@@ -158,7 +149,6 @@ app.post("/complete-intervention", async (req, res) => {
     );
 
     res.json({ status: "Unlocked. Back on Track!" });
-
   } catch (err) {
     res.status(500).json({ error: "Server Error" });
   }
