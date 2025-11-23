@@ -96,9 +96,13 @@ app.post("/daily-checkin", async (req, res) => {
 
 app.get("/assign-intervention", async (req, res) => {
   try {
+    console.log("🔥 Mentor approval triggered!");
+    console.log("Query Params:", req.query);
+
     const { student_id, intervention_id } = req.query;
 
     if (!student_id || !intervention_id) {
+      console.log("❌ Missing params");
       return res.status(400).send("Missing required query params");
     }
 
@@ -111,6 +115,7 @@ app.get("/assign-intervention", async (req, res) => {
     );
 
     if (result.rowCount === 0) {
+      console.log("Intervention not found");
       return res.status(400).send("No intervention found to assign");
     }
 
@@ -119,13 +124,15 @@ app.get("/assign-intervention", async (req, res) => {
       [student_id]
     );
 
-    res.send("Intervention Approved! Task Assigned Successfully 🎯");
+    console.log("Intervention assigned successfully!");
+    res.send("Intervention Approved! Task Assigned Successfully");
 
   } catch (err) {
-    console.error(err);
+    console.error("Server Error:", err);
     res.status(500).send("Server Error");
   }
 });
+
 
 app.post("/complete-intervention", async (req, res) => {
   const { student_id } = req.body;
